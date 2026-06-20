@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'core/notifications/push_notification_service.dart';
+import 'core/telemetry/firebase_telemetry_service.dart';
+import 'features/fitness/presentation/bloc/fitness_bloc.dart';
+import 'injection.dart';
 import 'views/shared/theme.dart';
-import 'viewmodels/fitness_viewmodel.dart';
 import 'views/dashboard/dashboard_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await configureDependencies();
+  await getIt<FirebaseTelemetryService>().initialize();
+  await getIt<PushNotificationService>().initialize();
+
   runApp(const PulseFitApp());
 }
 
@@ -14,8 +22,8 @@ class PulseFitApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => FitnessViewModel(),
+    return BlocProvider(
+      create: (_) => getIt<FitnessBloc>()..add(const FitnessStarted()),
       child: MaterialApp(
         title: 'PulseFit - Fitness Tracker',
         theme: FitnessTheme.darkTheme,

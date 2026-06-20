@@ -8,9 +8,16 @@ import 'package:injectable/injectable.dart';
 
 @lazySingleton
 class FirebaseTelemetryService {
+  static const _firebaseEnabled = bool.fromEnvironment('ENABLE_FIREBASE');
+
   bool _enabled = false;
 
   Future<void> initialize() async {
+    if (!_firebaseEnabled) {
+      debugPrint('Firebase telemetry disabled: run with --dart-define=ENABLE_FIREBASE=true after Firebase setup.');
+      return;
+    }
+
     try {
       await Firebase.initializeApp();
       _enabled = true;

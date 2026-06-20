@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../shared/theme.dart';
 import '../../models/workout.dart';
-import '../../viewmodels/fitness_viewmodel.dart';
+import '../../features/fitness/presentation/bloc/fitness_bloc.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -20,18 +20,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Ensure we query for weekly workouts / data on load
-      final viewModel = context.read<FitnessViewModel>();
-      viewModel.loadDataForDate(viewModel.currentDate);
+      final bloc = context.read<FitnessBloc>();
+      bloc.add(FitnessDateSelected(bloc.state.currentDate));
     });
   }
 
-  void _handleDelete(BuildContext context, FitnessViewModel viewModel, Workout workout) async {
+  void _handleDelete(BuildContext context, Workout workout) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final workoutId = workout.id;
     if (workoutId == null) return;
 
     // Remove from database
-    await viewModel.deleteWorkout(workoutId);
+    context.read<FitnessBloc>().add(FitnessWorkoutDeleted(workoutId));
 
     // Show undo banner
     scaffoldMessenger.clearSnackBars();
@@ -44,7 +44,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           textColor: FitnessTheme.primary,
           onPressed: () async {
             // Re-insert workout
-            await viewModel.addWorkout(workout);
+            context.read<FitnessBloc>().add(FitnessWorkoutAdded(workout));
           },
         ),
       ),
@@ -57,7 +57,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  void _showDetailsDialog(BuildContext context, Workout workout, FitnessViewModel viewModel) {
+  void _showDetailsDialog(BuildContext context, Workout workout) {
     showDialog(
       context: context,
       builder: (context) {
@@ -95,7 +95,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                _handleDelete(context, viewModel, workout);
+                _handleDelete(context, workout);
               },
               child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
             ),
@@ -186,10 +186,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Consumer<FitnessViewModel>(
-        builder: (context, viewModel, child) {
+      body: BlocBuilder<FitnessBloc, FitnessState>(
+        builder: (context, state) {
           // Sort all weekly/recent workouts descending
-          final workouts = List<Workout>.from(viewModel.weeklyWorkouts)
+          final workouts = List<Workout>.from(state.weeklyWorkouts)
             ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
           if (workouts.isEmpty) {
@@ -238,7 +238,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         child: Card(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12.0),
-                            child: _buildWorkoutListView(workouts, viewModel, isWide),
+                            child: _buildWorkoutListView(workouts, isWide),
                           ),
                         ),
                       ),
@@ -262,7 +262,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   ),
                                 ),
                               )
-                            : _buildWorkoutDetailPane(viewModel, _selectedWorkout!),
+                            : _buildWorkoutDetailPane(_selectedWorkout!),
                       ),
                     ],
                   ),
@@ -271,7 +271,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 // Mobile layout (Standard list view)
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: _buildWorkoutListView(workouts, viewModel, isWide),
+                  child: _buildWorkoutListView(workouts, isWide),
                 );
               }
             },
@@ -281,7 +281,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildWorkoutListView(List<Workout> workouts, FitnessViewModel viewModel, bool isWide) {
+  Widget _buildWorkoutListView(List<Workout> workouts, bool isWide) {
     return ListView.separated(
       itemCount: workouts.length,
       separatorBuilder: (context, index) => const Divider(color: FitnessTheme.cardBorder, height: 1),
@@ -301,7 +301,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             padding: const EdgeInsets.only(right: 20),
             child: const Icon(Icons.delete, color: Colors.white),
           ),
-          onDismissed: (direction) => _handleDelete(context, viewModel, workout),
+          onDismissed: (direction) => _handleDelete(context, workout),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             leading: _buildTypeIcon(workout.type, 18),
@@ -344,7 +344,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   _selectedWorkout = workout;
                 });
               } else {
-                _showDetailsDialog(context, workout, viewModel);
+                _showDetailsDialog(context, workout);
               }
             },
           ),
@@ -353,7 +353,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildWorkoutDetailPane(FitnessViewModel viewModel, Workout workout) {
+  Widget _buildWorkoutDetailPane(Workout workout) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -385,7 +385,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                   tooltip: 'Delete Workout',
-                  onPressed: () => _handleDelete(context, viewModel, workout),
+                  onPressed: () => _handleDelete(context, workout),
                 ),
               ],
             ),

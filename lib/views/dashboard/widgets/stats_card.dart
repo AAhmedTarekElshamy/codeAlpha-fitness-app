@@ -11,7 +11,9 @@ class StatsCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onAddTap;
+  final VoidCallback? onSubtractTap;
   final String? addTooltip;
+  final String? subtractTooltip;
 
   const StatsCard({
     super.key,
@@ -23,7 +25,9 @@ class StatsCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.onAddTap,
+    this.onSubtractTap,
     this.addTooltip,
+    this.subtractTooltip,
   });
 
   @override
@@ -33,7 +37,7 @@ class StatsCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -53,30 +57,28 @@ class StatsCard extends StatelessWidget {
                     size: 20,
                   ),
                 ),
-                // Quick add action button
-                if (onAddTap != null)
-                  Tooltip(
-                    message: addTooltip ?? 'Quick add',
-                    child: Material(
-                      color: FitnessTheme.cardBorder,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        onTap: onAddTap,
-                        customBorder: const CircleBorder(),
-                        child: const Padding(
-                          padding: EdgeInsets.all(6.0),
-                          child: Icon(
-                            Icons.add,
-                            color: Colors.white,
-                            size: 16,
-                          ),
+                if (onSubtractTap != null || onAddTap != null)
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onAddTap != null)
+                        _QuickActionButton(
+                          icon: Icons.add,
+                          tooltip: addTooltip ?? 'Quick add',
+                          onTap: onAddTap!,
                         ),
-                      ),
-                    ),
+                      if (onSubtractTap != null && onAddTap != null) const SizedBox(height: 6),
+                      if (onSubtractTap != null)
+                        _QuickActionButton(
+                          icon: Icons.remove,
+                          tooltip: subtractTooltip ?? 'Quick subtract',
+                          onTap: onSubtractTap!,
+                        ),
+                    ],
                   ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             // Title
             Text(
               title,
@@ -86,7 +88,7 @@ class StatsCard extends StatelessWidget {
                 color: FitnessTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             // Metrics
             Row(
               textBaseline: TextBaseline.alphabetic,
@@ -95,7 +97,7 @@ class StatsCard extends StatelessWidget {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 21,
                     fontWeight: FontWeight.bold,
                     color: FitnessTheme.textPrimary,
                   ),
@@ -111,7 +113,7 @@ class StatsCard extends StatelessWidget {
                 ),
               ],
             ),
-            const Spacer(),
+            const SizedBox(height: 8),
             // Goal indicator
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -133,7 +135,7 @@ class StatsCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             // Progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -148,6 +150,41 @@ class StatsCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: FitnessTheme.cardBorder,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox.square(
+            dimension: 24,
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 15,
+            ),
+          ),
         ),
       ),
     );

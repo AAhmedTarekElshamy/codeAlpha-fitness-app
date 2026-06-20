@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../shared/theme.dart';
-import '../../viewmodels/fitness_viewmodel.dart';
+import '../../features/fitness/presentation/bloc/fitness_bloc.dart';
+import '../../models/daily_stats.dart';
 import 'widgets/daily_progress_ring.dart';
 import 'widgets/stats_card.dart';
 import 'widgets/weekly_bar_chart.dart';
 import '../log_activity/log_activity_screen.dart';
 import '../history/history_screen.dart';
+import '../../src/presentation/screens/step_counter_maps_screen.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -17,18 +20,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FitnessViewModel>().loadDataForDate(DateTime.now());
-    });
-  }
-
-  void _selectDate(BuildContext context, FitnessViewModel viewModel) async {
+  void _selectDate(BuildContext context, FitnessState state) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: viewModel.currentDate,
+      initialDate: state.currentDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
@@ -45,13 +40,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       },
     );
-    if (picked != null && picked != viewModel.currentDate) {
-      viewModel.loadDataForDate(picked);
+    if (picked != null && picked != state.currentDate && context.mounted) {
+      context.read<FitnessBloc>().add(FitnessDateSelected(picked));
     }
   }
 
-  void _showGoalsDialog(BuildContext context, FitnessViewModel viewModel) {
-    final stats = viewModel.todayStats;
+  void _showGoalsDialog(BuildContext context, FitnessState state) {
+    final stats = state.todayStats;
     if (stats == null) return;
 
     final stepsController = TextEditingController(text: stats.targetSteps.toString());
@@ -109,11 +104,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final calories = int.tryParse(caloriesController.text) ?? stats.targetCalories;
                 final water = int.tryParse(waterController.text) ?? stats.targetWater;
 
-                viewModel.updateGoals(
+                context.read<FitnessBloc>().add(FitnessGoalsUpdated(
                   targetSteps: steps,
                   targetCalories: calories,
                   targetWater: water,
-                );
+                ));
                 Navigator.pop(context);
                 
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -189,6 +184,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.map, color: Colors.white),
+            tooltip: 'Step Counter & GPS',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StepCounterMapScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
             tooltip: 'Workout History',
             onPressed: () {
@@ -198,33 +205,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             },
           ),
-          Consumer<FitnessViewModel>(
-            builder: (context, viewModel, child) {
+          BlocBuilder<FitnessBloc, FitnessState>(
+            builder: (context, state) {
               return IconButton(
                 icon: const Icon(Icons.edit_road, color: Colors.white),
                 tooltip: 'Edit Goals',
-                onPressed: () => _showGoalsDialog(context, viewModel),
+                onPressed: () => _showGoalsDialog(context, state),
               );
             },
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Consumer<FitnessViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.isLoading) {
+      body: BlocBuilder<FitnessBloc, FitnessState>(
+        builder: (context, state) {
+          if (state.isLoading) {
             return const Center(child: CircularProgressIndicator(color: FitnessTheme.primary));
           }
 
-          final stats = viewModel.todayStats;
+          final stats = state.todayStats;
           if (stats == null) {
             return const Center(child: Text('Failed to load daily stats.'));
           }
 
           final today = DateTime.now();
-          final isToday = viewModel.currentDate.year == today.year &&
-              viewModel.currentDate.month == today.month &&
-              viewModel.currentDate.day == today.day;
+          final isToday = state.currentDate.year == today.year &&
+              state.currentDate.month == today.month &&
+              state.currentDate.day == today.day;
 
           // Responsive design layout builder
           return LayoutBuilder(
@@ -243,7 +250,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         flex: 4,
                         child: Column(
                           children: [
-                            _buildDateSelector(viewModel),
+                            _buildDateSelector(state),
                             const SizedBox(height: 32),
                             DailyProgressRing(
                               steps: stats.steps,
@@ -269,11 +276,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         flex: 6,
                         child: Column(
                           children: [
-                            _buildStatsGrid(viewModel, stats, isWide),
+                            _buildAiRecommendation(state),
+                            const SizedBox(height: 16),
+                            _buildStatsGrid(state, stats, isWide),
                             const SizedBox(height: 24),
                             WeeklyBarChart(
-                              weeklyStats: viewModel.weeklyStats,
-                              getCaloriesForDate: viewModel.getCaloriesBurnedForDate,
+                              weeklyStats: state.weeklyStats,
+                              getCaloriesForDate: state.getCaloriesBurnedForDate,
                             ),
                           ],
                         ),
@@ -287,7 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                   child: Column(
                     children: [
-                      _buildDateSelector(viewModel),
+                      _buildDateSelector(state),
                       const SizedBox(height: 24),
                       Center(
                         child: DailyProgressRing(
@@ -297,11 +306,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(height: 28),
-                      _buildStatsGrid(viewModel, stats, isWide),
+                      _buildAiRecommendation(state),
+                      const SizedBox(height: 16),
+                      _buildStatsGrid(state, stats, isWide),
                       const SizedBox(height: 20),
                       WeeklyBarChart(
-                        weeklyStats: viewModel.weeklyStats,
-                        getCaloriesForDate: viewModel.getCaloriesBurnedForDate,
+                        weeklyStats: state.weeklyStats,
+                        getCaloriesForDate: state.getCaloriesBurnedForDate,
                       ),
                       const SizedBox(height: 80), // spacer for FAB
                     ],
@@ -325,8 +336,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // Header date navigation bar
-  Widget _buildDateSelector(FitnessViewModel viewModel) {
-    final dateLabel = DateFormat('EEEE, MMMM d').format(viewModel.currentDate);
+  Widget _buildDateSelector(FitnessState state) {
+    final dateLabel = DateFormat('EEEE, MMMM d').format(state.currentDate);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -341,13 +352,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.chevron_left, color: Colors.white),
             onPressed: () {
-              viewModel.loadDataForDate(
-                viewModel.currentDate.subtract(const Duration(days: 1)),
-              );
+              context.read<FitnessBloc>().add(
+                    FitnessDateSelected(state.currentDate.subtract(const Duration(days: 1))),
+                  );
             },
           ),
           InkWell(
-            onTap: () => _selectDate(context, viewModel),
+            onTap: () => _selectDate(context, state),
             child: Row(
               children: [
                 const Icon(Icons.calendar_today, size: 16, color: FitnessTheme.primary),
@@ -365,12 +376,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right, color: Colors.white),
-            onPressed: viewModel.currentDate.isAfter(DateTime.now().subtract(const Duration(days: 1)))
+            onPressed: state.currentDate.isAfter(DateTime.now().subtract(const Duration(days: 1)))
                 ? null
                 : () {
-                    viewModel.loadDataForDate(
-                      viewModel.currentDate.add(const Duration(days: 1)),
-                    );
+                    context.read<FitnessBloc>().add(
+                          FitnessDateSelected(state.currentDate.add(const Duration(days: 1))),
+                        );
                   },
           ),
         ],
@@ -379,61 +390,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // Dashboard quick-stats cards grid
-  Widget _buildStatsGrid(FitnessViewModel viewModel, var stats, bool isWide) {
-    // Return a responsive grid layout
-    return GridView.count(
-      crossAxisCount: isWide ? 2 : 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.35,
-      children: [
-        StatsCard(
-          title: 'Steps Walked',
-          value: stats.steps.toString(),
-          unit: '',
-          current: stats.steps,
-          target: stats.targetSteps,
-          icon: Icons.directions_run,
-          color: FitnessTheme.steps,
-          addTooltip: 'Add 1,000 steps',
-          onAddTap: () {
-            viewModel.addSteps(1000);
-          },
+  Widget _buildAiRecommendation(FitnessState state) {
+    if (state.recommendation.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.auto_awesome, color: FitnessTheme.primary),
+        title: const Text(
+          'AI Recommendation',
+          style: TextStyle(fontWeight: FontWeight.bold, color: FitnessTheme.textPrimary),
         ),
-        StatsCard(
-          title: 'Active Burn',
-          value: viewModel.totalCaloriesBurned.toString(),
-          unit: ' kcal',
-          current: viewModel.totalCaloriesBurned,
-          target: stats.targetCalories,
-          icon: Icons.local_fire_department,
-          color: FitnessTheme.calories,
+        subtitle: Text(
+          state.recommendation,
+          style: const TextStyle(color: FitnessTheme.textSecondary),
         ),
-        StatsCard(
-          title: 'Hydration',
-          value: stats.waterIntake.toString(),
-          unit: ' ml',
-          current: stats.waterIntake,
-          target: stats.targetWater,
-          icon: Icons.water_drop,
-          color: FitnessTheme.water,
-          addTooltip: 'Add 250ml water',
-          onAddTap: () {
-            viewModel.addWater(250);
-          },
-        ),
-        StatsCard(
-          title: 'Workouts',
-          value: viewModel.todayWorkouts.length.toString(),
-          unit: ' logged',
-          current: viewModel.todayWorkouts.length,
-          target: 1, // Target of 1 workout a day
-          icon: Icons.fitness_center,
-          color: FitnessTheme.workout,
-        ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildStatsGrid(FitnessState state, DailyStats stats, bool isWide) {
+    final cards = [
+      StatsCard(
+        title: 'Steps Walked',
+        value: stats.steps.toString(),
+        unit: '',
+        current: stats.steps,
+        target: stats.targetSteps,
+        icon: Icons.directions_run,
+        color: FitnessTheme.steps,
+        subtractTooltip: 'Remove 1,000 steps',
+        addTooltip: 'Add 1,000 steps',
+        onSubtractTap: () {
+          context.read<FitnessBloc>().add(const FitnessStepsAdded(-1000));
+        },
+        onAddTap: () {
+          context.read<FitnessBloc>().add(const FitnessStepsAdded(1000));
+        },
+      ),
+      StatsCard(
+        title: 'Active Burn',
+        value: state.totalCaloriesBurned.toString(),
+        unit: ' kcal',
+        current: state.totalCaloriesBurned,
+        target: stats.targetCalories,
+        icon: Icons.local_fire_department,
+        color: FitnessTheme.calories,
+      ),
+      StatsCard(
+        title: 'Hydration',
+        value: stats.waterIntake.toString(),
+        unit: ' ml',
+        current: stats.waterIntake,
+        target: stats.targetWater,
+        icon: Icons.water_drop,
+        color: FitnessTheme.water,
+        subtractTooltip: 'Remove 250ml water',
+        addTooltip: 'Add 250ml water',
+        onSubtractTap: () {
+          context.read<FitnessBloc>().add(const FitnessWaterAdded(-250));
+        },
+        onAddTap: () {
+          context.read<FitnessBloc>().add(const FitnessWaterAdded(250));
+        },
+      ),
+      StatsCard(
+        title: 'Workouts',
+        value: state.todayWorkouts.length.toString(),
+        unit: ' logged',
+        current: state.todayWorkouts.length,
+        target: 1,
+        icon: Icons.fitness_center,
+        color: FitnessTheme.workout,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth < 380 ? 1 : 2;
+        final cardHeight = crossAxisCount == 1 ? 196.0 : 204.0;
+
+        return GridView.builder(
+          itemCount: cards.length,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            mainAxisExtent: cardHeight,
+          ),
+          itemBuilder: (context, index) => cards[index],
+        );
+      },
     );
   }
 }

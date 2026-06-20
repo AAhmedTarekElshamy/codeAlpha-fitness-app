@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../shared/theme.dart';
 import '../../models/workout.dart';
-import '../../viewmodels/fitness_viewmodel.dart';
+import '../../features/fitness/presentation/bloc/fitness_bloc.dart';
 
 class LogActivityScreen extends StatefulWidget {
   const LogActivityScreen({super.key});
@@ -47,9 +47,9 @@ class _LogActivityScreenState extends State<LogActivityScreen> {
   @override
   void initState() {
     super.initState();
-    final viewModel = context.read<FitnessViewModel>();
+    final fitnessState = context.read<FitnessBloc>().state;
     // Match the selected date on the dashboard for logging
-    final currentDate = viewModel.currentDate;
+    final currentDate = fitnessState.currentDate;
     final now = DateTime.now();
     _workoutDateTime = DateTime(
       currentDate.year,
@@ -135,7 +135,7 @@ class _LogActivityScreenState extends State<LogActivityScreen> {
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       );
 
-      context.read<FitnessViewModel>().addWorkout(workout);
+      context.read<FitnessBloc>().add(FitnessWorkoutAdded(workout));
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

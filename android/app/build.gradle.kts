@@ -13,11 +13,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
+
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
@@ -41,4 +40,25 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}
+
+tasks.register<Copy>("copyOutputsToOriginalBuildDir") {
+    from("C:/Users/Public/fitness_app_build/app/outputs")
+    into(file("${projectDir}/../../build/app/outputs"))
+}
+
+tasks.configureEach {
+    if (name.startsWith("assemble") || name.startsWith("bundle")) {
+        finalizedBy("copyOutputsToOriginalBuildDir")
+    }
 }

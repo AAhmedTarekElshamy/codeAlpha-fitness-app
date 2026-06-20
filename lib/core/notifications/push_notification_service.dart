@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:injectable/injectable.dart';
 
@@ -16,6 +21,19 @@ class PushNotificationService {
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
+
+    await _initializeFirebaseMessaging();
+  }
+
+  Future<String?> getPushToken() async {
+    if (Firebase.apps.isEmpty) return null;
+
+    try {
+      return FirebaseMessaging.instance.getToken();
+    } catch (error) {
+      debugPrint('Firebase Messaging token unavailable: $error');
+      return null;
+    }
   }
 
   Future<void> showGoalReached(String title, String body) async {
@@ -34,5 +52,28 @@ class PushNotificationService {
       body,
       const NotificationDetails(android: android, iOS: darwin, macOS: darwin),
     );
+  }
+
+  Future<void> _initializeFirebaseMessaging() async {
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+
+      FirebaseMessaging.onMessage.listen((message) {
+        final notification = message.notification;
+        if (notification == null) return;
+
+        unawaited(
+          showGoalReached(
+            notification.title ?? 'PulseFit',
+            notification.body ?? 'You have a new fitness update.',
+          ),
+        );
+      });
+    } catch (error) {
+      debugPrint('Firebase Messaging disabled: $error');
+    }
   }
 }
